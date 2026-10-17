@@ -17,12 +17,16 @@ function HeadlessPlayer({
   blob,
   startOffsetMs = 0,
   forceMute,
+  volume,
+  pan,
   onDuration,
 }: {
   url?: string;
   blob?: Blob;
   startOffsetMs?: number;
   forceMute?: boolean;
+  volume?: number;
+  pan?: number;
   onDuration?: (ms: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,6 +35,8 @@ function HeadlessPlayer({
     startOffsetMs,
     interactive: false,
     forceMute,
+    volume,
+    pan,
   });
 
   // Keep the callback in a ref so an unstable identity (e.g. an inline arrow
@@ -78,6 +84,10 @@ export function AudioEngine() {
   const activeTake = useSessionStore((s) => s.activeTake);
   const layers = useSessionStore((s) => s.layers);
   const mutedTracks = useSessionStore((s) => s.mutedTracks);
+  const trackVolumes = useSessionStore((s) => s.trackVolumes);
+  const trackPans = useSessionStore((s) => s.trackPans);
+  const extraTracks = useSessionStore((s) => s.extraTracks);
+  const setExtraTrackDuration = useSessionStore((s) => s.setExtraTrackDuration);
   const soloedTracks = useSessionStore((s) => s.soloedTracks);
   const setBackingTrackDurationMs = useSessionStore((s) => s.setBackingTrackDurationMs);
   const setActiveTakeDurationMs = useSessionStore((s) => s.setActiveTakeDurationMs);
@@ -94,7 +104,10 @@ export function AudioEngine() {
         <HeadlessPlayer
           url={backingTrack.url}
           blob={backingTrack.blob}
+          startOffsetMs={backingTrack.startMs ?? 0}
           forceMute={isSilenced('backing')}
+          volume={trackVolumes['backing'] ?? 1}
+          pan={trackPans['backing'] ?? 0}
           onDuration={setBackingTrackDurationMs}
         />
       )}
@@ -104,18 +117,37 @@ export function AudioEngine() {
           url={activeTake.url}
           blob={activeTake.blob}
           startOffsetMs={activeTake.transportStartMs}
-          forceMute={isSilenced('vocal')}
+          forceMute={isSilenced('active_take')}
+          volume={trackVolumes['active_take'] ?? 1}
+          pan={trackPans['active_take'] ?? 0}
           onDuration={setActiveTakeDurationMs}
         />
       )}
 
-      {layers.map((layer, index) => (
+      {extraTracks.map((t) =>
+        t.clip ? (
+          <HeadlessPlayer
+            key={t.clip.id}
+            url={t.clip.url}
+            blob={t.clip.blob}
+            startOffsetMs={t.clip.startMs}
+            forceMute={isSilenced(t.id)}
+            volume={trackVolumes[t.id] ?? 1}
+            pan={trackPans[t.id] ?? 0}
+            onDuration={(ms) => setExtraTrackDuration(t.id, ms)}
+          />
+        ) : null,
+      )}
+
+      {layers.map((layer) => (
         <HeadlessPlayer
           key={layer.id}
           url={layer.url}
           blob={layer.blob}
           startOffsetMs={layer.transportStartMs}
-          forceMute={isSilenced(`layer-${index}`)}
+          forceMute={isSilenced(layer.id)}
+          volume={trackVolumes[layer.id] ?? 1}
+          pan={trackPans[layer.id] ?? 0}
           onDuration={(ms) => setLayerDurationMs(layer.id, ms)}
         />
       ))}
